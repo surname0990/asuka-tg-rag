@@ -17,7 +17,7 @@ Knowledge Bot — это Telegram-бот, использующий нейрон�
 - PostgreSQL
 - Telegram API
 - OpenAI API
-- FAISS
+- FAISS, Pinecone
 - Sentence Transformers
 
 ## Установка

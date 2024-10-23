@@ -1,5 +1,8 @@
 {
   "openai_api_key": "YOUR_OPENAI_API_KEY",
   "telegram_bot_token": "YOUR_TELEGRAM_BOT_TOKEN",
-  "database_url": "postgresql://postgres:mysecretpassword@localhost/mydatabase"
+  "database_url": "postgresql://postgres:mysecretpassword@localhost/mydatabase",
+  "use_pinecone": false,
+  "pinecone_api_key":"",
+  "pinecone_environment":""
 }

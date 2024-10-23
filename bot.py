@@ -5,10 +5,10 @@ import logging
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from sentence_transformers import SentenceTransformer
-import faiss
 import openai
 from datetime import datetime
-from database import Database  # Импортируем класс Database
+from database import Database  
+from index import FAISSIndex, PineconeIndex  
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -18,20 +18,33 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 class KnowledgeBot:
     def __init__(self, config):
-        self.openai_api_key = config['openai_api_key']
+        openai.api_key = config['openai_api_key']
         self.telegram_token = config['telegram_bot_token']
-        self.database = Database(config['database_url'])  # Инициализация базы данных
+        self.database = Database(config['database_url']) 
         self.model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-        self.index = faiss.IndexFlatL2(384)
-        self.documents = self.database.load_knowledge_base()  # Загружаем документы из БД
+
+        # Выбор индекса (FAISS или Pinecone)
+        if config['use_pinecone']:
+            self.index = PineconeIndex(config['pinecone_api_key'], config['pinecone_environment'])
+        else:
+            self.index = FAISSIndex()
+        
+        self.documents = self.database.load_knowledge_base() 
+        self._load_vectors() 
+
+    def _load_vectors(self):
+        """Загрузка векторов документов в индекс."""
+        for doc in self.documents:
+            vector = self.model.encode(doc)
+            self.index.add_document(vector)  
 
     def add_document(self, tg_id, chat_id, text):
         """Добавление документа в базу знаний и в базу данных."""
-        timestamp = datetime.now()  # Получаем текущее время
+        timestamp = datetime.now() 
         vector = self.model.encode(text)
-        self.index.add(np.array([vector]).astype(np.float32))  
+        self.index.add_document(vector)  
         self.documents.append(text)
-        self.database.save_document(tg_id, chat_id, timestamp, text)  # Сохраняем документ в БД
+        self.database.save_document(tg_id, chat_id, timestamp, text)  
         logger.info(f"Добавлен документ: {text}")
 
     def generate_response(self, closest_docs, query_text):
@@ -51,8 +64,8 @@ class KnowledgeBot:
 
     async def add_document_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик текстовых сообщений для добавления документа."""
-        tg_id = update.effective_user.id  # Получаем ID Telegram пользователя
-        chat_id = update.effective_chat.id  # Получаем ID чата
+        tg_id = update.effective_user.id 
+        chat_id = update.effective_chat.id 
         text = update.message.text
         self.add_document(tg_id, chat_id, text)
         
@@ -63,16 +76,11 @@ class KnowledgeBot:
         query_text = update.message.text
         query_vector = self.model.encode(query_text)
 
-        k = 5  # количество ближайших документов
-        distances, indices = self.index.search(np.array([query_vector]).astype(np.float32), k)
+        closest_docs = self.index.search(query_vector) 
 
         logger.info(f"Запрос: {query_text}")
-        logger.info(f"Найденные индексы: {indices[0]}, расстояния: {distances[0]}")
-
-        valid_indices = [i for i in indices[0] if i >= 0]
-
-        if valid_indices:
-            closest_docs = [self.documents[i] for i in valid_indices]
+        
+        if closest_docs:
             logger.info(f"Ближайшие документы: {closest_docs}")
             response = self.generate_response(closest_docs, query_text)
             await update.message.reply_text(response)
