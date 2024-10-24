@@ -1,6 +1,5 @@
 import os
 import json
-import numpy as np
 import logging
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
@@ -52,7 +51,7 @@ class KnowledgeBot:
         prompt = f"Выводы на основе следующих документов: {closest_docs}\n\nЗапрос: {query_text}\n\nОтвет:"
         
         response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",  # Или gpt-4, если у вас есть доступ
+            model="gpt-3.5-turbo",  
             messages=[{"role": "user", "content": prompt}]
         )
         

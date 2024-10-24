@@ -1,19 +1,20 @@
 CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,         
-    tg_id VARCHAR(255) UNIQUE NOT NULL, 
-    position VARCHAR(255) NOT NULL, -- Должность
-    project VARCHAR(255) NOT NULL,  -- Проект
+    id SERIAL PRIMARY KEY,
+    tg_id VARCHAR(255) UNIQUE NOT NULL,
+    role VARCHAR(50) NOT NULL, 
+    group_id INTEGER NOT NULL 
 );
 
 CREATE TABLE IF NOT EXISTS groups (
-    id SERIAL PRIMARY KEY,          
-    name VARCHAR(255) UNIQUE NOT NULL 
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) UNIQUE NOT NULL
 );
 
-CREATE TABLE documents (
+CREATE TABLE IF NOT EXISTS documents (
     id SERIAL PRIMARY KEY,
     tg_id BIGINT NOT NULL,
     chat_id BIGINT NOT NULL,
     timestamp TIMESTAMP NOT NULL,
-    text TEXT NOT NULL
+    text TEXT NOT NULL,
+    group_id INTEGER NOT NULL 
 );

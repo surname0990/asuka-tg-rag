@@ -52,8 +52,8 @@ docker exec -it my_postgres psql -U postgres -d mydatabase
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     tg_id VARCHAR(255) UNIQUE NOT NULL,
-    position VARCHAR(255) NOT NULL,
-    project VARCHAR(255) NOT NULL
+    role VARCHAR(50) NOT NULL, 
+    group_id INTEGER NOT NULL 
 );
 
 CREATE TABLE IF NOT EXISTS groups (
@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS documents (
     tg_id BIGINT NOT NULL,
     chat_id BIGINT NOT NULL,
     timestamp TIMESTAMP NOT NULL,
-    text TEXT NOT NULL
+    text TEXT NOT NULL,
+    group_id INTEGER NOT NULL 
 );
 ```
 
