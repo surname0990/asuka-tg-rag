@@ -99,10 +99,9 @@ class KnowledgeBot:
 
         group = self.database.get_user_group(tg_id)
         if group:
-            group_id = group[0]  # Извлекаем только group_id из кортежа
+            group_id = group[0] 
             closest_docs = self.index_manager.search(group_id, query_vector)
             
-            # Проверка, что closest_docs - это не пустой массив
             if closest_docs is not None and len(closest_docs) > 0:
                 response = self.generate_response(closest_docs, query_text)
                 await update.message.reply_text(response)
@@ -143,7 +142,7 @@ class KnowledgeBot:
         application.add_handler(CommandHandler("start", self.start))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.add_document_handler))  
         application.add_handler(MessageHandler(filters.TEXT & filters.COMMAND, self.query_handler))
-        application.add_handler(CommandHandler("adduser", self.add_user_to_group))  # Добавляем обработчик для добавления пользователя в группу
+        application.add_handler(CommandHandler("adduser", self.add_user_to_group)) 
 
         logger.info("Бот запущен.")
         application.run_polling()

@@ -57,7 +57,7 @@ class Database:
         print("get_user_group - tg_id:", tg_id)
         try:
             with closing(self.connection.cursor()) as cursor:
-                cursor.execute("SELECT id FROM users WHERE tg_id = %s", (str(tg_id),))  # tg_id передан как строка
+                cursor.execute("SELECT id FROM users WHERE tg_id = %s", (str(tg_id),))
                 user_row = cursor.fetchone()
                 if user_row:
                     user_id = user_row[0]

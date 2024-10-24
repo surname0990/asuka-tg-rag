@@ -1,19 +1,14 @@
-# Виртуальное окружение
 venv/
 env/
 
-# Конфигурационные файлы
 config.json
 
-# Системные файлы
 __pycache__/
 *.pyc
 *.pyo
 
-# Файлы IDE (PyCharm, VSCode)
 .idea/
 .vscode/
 
-# Логи и временные файлы
 *.log
 *.pid
