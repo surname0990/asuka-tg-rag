@@ -46,30 +46,7 @@ docker run --name my_postgres -e POSTGRES_PASSWORD=mysecretpassword -e POSTGRES_
 ```
 docker exec -it my_postgres psql -U postgres -d mydatabase
 ```
-Выполните следующий SQL-код для создания таблиц:
-
-```sql
-CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
-    tg_id VARCHAR(255) UNIQUE NOT NULL,
-    role VARCHAR(50) NOT NULL, 
-    group_id INTEGER NOT NULL 
-);
-
-CREATE TABLE IF NOT EXISTS groups (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) UNIQUE NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS documents (
-    id SERIAL PRIMARY KEY,
-    tg_id BIGINT NOT NULL,
-    chat_id BIGINT NOT NULL,
-    timestamp TIMESTAMP NOT NULL,
-    text TEXT NOT NULL,
-    group_id INTEGER NOT NULL 
-);
-```
+Выполните миграции из дирректории migrations:
 
 3. Поправьте config.json
 
