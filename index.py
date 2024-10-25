@@ -19,7 +19,7 @@ class PineconeIndexManager:
             logging.info(f"Создан новый Pinecone индекс для группы {group_id}.")
         return self.group_indices[group_id]
 
-    def add_document(self, group_id, vector):
+    def add_document(self, group_id, vector, document):
         """Добавление вектора документа в Pinecone для определенной группы."""
         index = self.get_or_create_index(group_id)
         vector_id = str(len(index.fetch())) 
@@ -35,25 +35,29 @@ class PineconeIndexManager:
 
 class FAISSIndexManager:
     def __init__(self):
-        self.group_indices = {} 
+        self.group_indices = {}
+        self.group_documents = {} 
     
     def get_or_create_index(self, group_id):
         """Получить или создать FAISS индекс для группы."""
         if group_id not in self.group_indices:
             self.group_indices[group_id] = faiss.IndexFlatL2(384)
+            self.group_documents[group_id] = [] 
             logging.info(f"Создан новый FAISS индекс для группы {group_id}.")
         return self.group_indices[group_id]
 
-    def add_document(self, group_id, vector):
-        """Добавление вектора документа в FAISS для определенной группы."""
+    def add_document(self, group_id, vector, document):
+        """Добавление вектора и документа в FAISS для определенной группы."""
         index = self.get_or_create_index(group_id)
-        index.add(np.array([vector]).astype(np.float32))  
-        logging.info(f"Вектор добавлен в FAISS для группы {group_id}.")
+        index.add(np.array([vector]).astype(np.float32))
+        self.group_documents[group_id].append(document)  # Сохранение документа
+        logging.info(f"Вектор и документ добавлены в FAISS для группы {group_id}.")
 
     def search(self, group_id, query_vector, k=5):
         """Поиск ближайших соседей в FAISS для определенной группы."""
         index = self.get_or_create_index(group_id)
         distances, indices = index.search(np.array([query_vector]).astype(np.float32), k)
+        
         if indices.size > 0:
-            return indices[0]
+            return [self.group_documents[group_id][i] for i in indices[0] if i < len(self.group_documents[group_id])]
         return []

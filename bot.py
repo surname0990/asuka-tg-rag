@@ -18,7 +18,7 @@ class KnowledgeBot:
     def __init__(self, config):
         openai.api_key = config['openai_api_key']
         self.telegram_token = config['telegram_bot_token']
-        self.database = Database(config['database_url']) 
+        self.db = Database(config['database_url']) 
         self.model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
 
         # Выбор индекса (FAISS или Pinecone)
@@ -31,7 +31,7 @@ class KnowledgeBot:
 
     def _initialize_group_indices(self):
         """Инициализация индексов для всех групп."""
-        groups = self.database.get_all_groups() 
+        groups = self.db.get_all_groups() 
 
         for group in groups:
             group_id = group[0]
@@ -39,11 +39,10 @@ class KnowledgeBot:
 
     def _load_vectors(self, group_id):
         """Загрузка векторов документов в индекс для конкретной группы."""
-        documents = self.database.load_knowledge_base(group_id) 
+        documents = self.db.load_knowledge_base(group_id) 
         for doc in documents:
             vector = self.model.encode(doc)
-            self.index_manager.add_document(group_id, vector) 
- 
+            self.index_manager.add_document(group_id, vector, doc) 
 
     def add_document(self, tg_id, chat_id, text, group_id):
         """Добавление документа в базу знаний и в базу данных."""
@@ -51,14 +50,13 @@ class KnowledgeBot:
         vector = self.model.encode(text)
 
         self.index_manager.add_document(group_id, vector)  
-        self.database.save_document(tg_id, chat_id, timestamp, text, group_id)  
+        self.db.save_document(tg_id, chat_id, timestamp, text, group_id)  
 
         logger.info(f"Добавлен документ: {text}")
 
     def generate_response(self, closest_docs, query_text):
         """Генерация ответа на основе похожих документов."""
         prompt = f"Выводы на основе следующих документов: {closest_docs}\n\nЗапрос: {query_text}\n\nОтвет:"
-        
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",  
             messages=[{"role": "user", "content": prompt}]
@@ -76,13 +74,13 @@ class KnowledgeBot:
         chat_id = update.effective_chat.id 
         text = update.message.text
 
-        allowed_chat_ids = self.database.get_allowed_chat_ids()
+        allowed_chat_ids = self.db.get_allowed_chat_ids()
         
         if chat_id not in allowed_chat_ids:
             await update.message.reply_text('Добавление документов разрешено только в определенных чатах.')
             return
 
-        group = self.database.get_user_group(tg_id)
+        group = self.db.get_user_group(tg_id)
         
         if group:
             group_id = group[0]  
@@ -93,11 +91,12 @@ class KnowledgeBot:
 
     async def query_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик запросов на основе текста."""
-        query_text = update.message.text
+        # query_text = update.message.text
+        query_text = update.message.text.replace('/query', '').strip()
         query_vector = self.model.encode(query_text)
         tg_id = update.effective_user.id
 
-        group = self.database.get_user_group(tg_id)
+        group = self.db.get_user_group(tg_id)
         if group:
             group_id = group[0] 
             closest_docs = self.index_manager.search(group_id, query_vector)
@@ -128,7 +127,7 @@ class KnowledgeBot:
 
         username = f"@{target_user.username}" if target_user.username else f"{target_user.first_name} {target_user.last_name or ''}".strip()
 
-        added = self.database.add_user_to_group(group_id, target_user.id)
+        added = self.db.add_user_to_group(group_id, target_user.id)
 
         if added:
             await update.message.reply_text(f'Пользователь {username} успешно добавлен в группу.')

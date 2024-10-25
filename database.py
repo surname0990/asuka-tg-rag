@@ -54,7 +54,6 @@ class Database:
 
     def get_user_group(self, tg_id):
         """Получение группы пользователя по его tg_id."""
-        print("get_user_group - tg_id:", tg_id)
         try:
             with closing(self.connection.cursor()) as cursor:
                 cursor.execute("SELECT id FROM users WHERE tg_id = %s", (str(tg_id),))
