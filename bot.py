@@ -19,7 +19,7 @@ class KnowledgeBot:
         openai.api_key = config['openai_api_key']
         self.telegram_token = config['telegram_bot_token']
         self.db = Database(config['database_url']) 
-        self.model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+        self.model = SentenceTransformer('sentence-transformers/all-MiniLM-L12-v2')
 
         # Выбор индекса (FAISS или Pinecone)
         if config['use_pinecone']:
@@ -49,7 +49,7 @@ class KnowledgeBot:
         timestamp = datetime.now() 
         vector = self.model.encode(text)
 
-        self.index_manager.add_document(group_id, vector)  
+        self.index_manager.add_document(group_id, vector, text)  
         self.db.save_document(tg_id, chat_id, timestamp, text, group_id)  
 
         logger.info(f"Добавлен документ: {text}")
@@ -66,82 +66,61 @@ class KnowledgeBot:
     
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /start."""
-        await update.message.reply_text('Привет! Отправь мне текст, и я добавлю его в базу знаний.')
+        user_id = update.effective_user.id 
 
-    async def add_document_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Обработчик текстовых сообщений для добавления документа."""
+        #Hardcode
+        group_id = 1  # ID группы аналитиков
+        added = self.db.add_user(group_id, user_id)
+
+        if added:
+            await update.message.reply_text(
+                'Привет! Ты добавлен в группу аналитиков. '
+                'Для каждой группы людей у меня своя нейронная сеть. '
+                'Чтобы вносить документы в базу знаний, обратись к @dep_ton за доступом. '
+                'В этом чате я также могу отвечать на ваши вопросы.'
+            )
+        else:
+            await update.message.reply_text(
+                'Привет! Ты уже в группе аналитиков. '
+                'Чтобы вносить документы в базу знаний, обратись к @dep_ton за доступом. '
+                'В этом чате я также могу отвечать на ваши вопросы.'
+            )
+
+    async def document_or_query_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         tg_id = update.effective_user.id 
         chat_id = update.effective_chat.id 
         text = update.message.text
 
-        allowed_chat_ids = self.db.get_allowed_chat_ids()
-        
-        if chat_id not in allowed_chat_ids:
-            await update.message.reply_text('Добавление документов разрешено только в определенных чатах.')
+        user_group = self.db.get_user_group(tg_id)
+
+        if not user_group:
+            await update.message.reply_text('Нажмите /start')
             return
 
-        group = self.db.get_user_group(tg_id)
+        group_id, chat_type = self.db.get_group_by_chat_id(chat_id)
         
-        if group:
-            group_id = group[0]  
+        if chat_type == 'document':
             self.add_document(tg_id, chat_id, text, group_id)
-            await update.message.reply_text('Документ добавлен в вашу группу!')
+            await update.message.reply_text('Документ добавлен в базу знаний для вашей группы!')
         else:
-            await update.message.reply_text('Вы не принадлежите ни одной касте.')
+            if group_id is None:
+                group_id = user_group
 
-    async def query_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Обработчик запросов на основе текста."""
-        # query_text = update.message.text
-        query_text = update.message.text.replace('/query', '').strip()
-        query_vector = self.model.encode(query_text)
-        tg_id = update.effective_user.id
-
-        group = self.db.get_user_group(tg_id)
-        if group:
-            group_id = group[0] 
+            query_vector = self.model.encode(text)
             closest_docs = self.index_manager.search(group_id, query_vector)
-            
-            if closest_docs is not None and len(closest_docs) > 0:
-                response = self.generate_response(closest_docs, query_text)
+
+            if closest_docs and len(closest_docs) > 0:
+                response = self.generate_response(closest_docs, text)
                 await update.message.reply_text(response)
             else:
                 await update.message.reply_text("Не найдено похожих документов.")
-        else:
-            await update.message.reply_text('Вы не принадлежите ни одной касте.')
-
-    async def add_user_to_group(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Добавление пользователя в группу. Только для администраторов."""
-        user_id = update.effective_user.id
-        group_id = 1  #TODO
-
-        chat_member = await context.bot.get_chat_member(update.effective_chat.id, user_id) 
-
-        if chat_member.status not in ['administrator', 'creator']: # TODO
-            await update.message.reply_text('У вас нет прав для добавления пользователей в группу.')
-            return
-
-        target_user = update.message.reply_to_message.from_user if update.message.reply_to_message else None
-        if not target_user:
-            await update.message.reply_text("Пожалуйста, укажите пользователя, которого хотите добавить.")
-            return
-
-        username = f"@{target_user.username}" if target_user.username else f"{target_user.first_name} {target_user.last_name or ''}".strip()
-
-        added = self.db.add_user_to_group(group_id, target_user.id)
-
-        if added:
-            await update.message.reply_text(f'Пользователь {username} успешно добавлен в группу.')
-        else:
-            await update.message.reply_text(f'Пользователь {username} уже в группе.')
 
     def run(self):
         """Запуск бота."""
         application = ApplicationBuilder().token(self.telegram_token).build()
 
         application.add_handler(CommandHandler("start", self.start))
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.add_document_handler))  
-        application.add_handler(MessageHandler(filters.TEXT & filters.COMMAND, self.query_handler))
-        application.add_handler(CommandHandler("adduser", self.add_user_to_group)) 
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.document_or_query_handler))  
 
         logger.info("Бот запущен.")
         application.run_polling()

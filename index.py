@@ -49,15 +49,32 @@ class FAISSIndexManager:
     def add_document(self, group_id, vector, document):
         """Добавление вектора и документа в FAISS для определенной группы."""
         index = self.get_or_create_index(group_id)
-        index.add(np.array([vector]).astype(np.float32))
-        self.group_documents[group_id].append(document)  # Сохранение документа
+        vector = np.array(vector).astype(np.float32).reshape(1, -1)
+        index.add(vector)
+        self.group_documents[group_id].append(document)
         logging.info(f"Вектор и документ добавлены в FAISS для группы {group_id}.")
 
     def search(self, group_id, query_vector, k=5):
         """Поиск ближайших соседей в FAISS для определенной группы."""
-        index = self.get_or_create_index(group_id)
-        distances, indices = index.search(np.array([query_vector]).astype(np.float32), k)
+        group_id = group_id[0] if isinstance(group_id, tuple) else group_id
+
+        if group_id not in self.group_indices:
+            logging.error(f"Индекс для группы {group_id} не существует.")
+            return []
+
+        index = self.group_indices[group_id]
+        query_vector = np.array(query_vector).astype(np.float32).reshape(1, -1)
+
+        distances, indices = index.search(query_vector, k)
         
-        if indices.size > 0:
-            return [self.group_documents[group_id][i] for i in indices[0] if i < len(self.group_documents[group_id])]
-        return []
+        results = []
+        for i in indices[0]:
+            if 0 <= i < len(self.group_documents[group_id]):
+                results.append(self.group_documents[group_id][i])
+
+        # if results:
+        #     logging.info(f"Найдено {len(results)} документов для группы {group_id}.")
+        # else:
+        #     logging.info(f"Нет найденных документов для группы {group_id}.")
+
+        return results

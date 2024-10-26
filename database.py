@@ -22,6 +22,7 @@ class Database:
                 cursor.execute("""
                     INSERT INTO documents (tg_id, chat_id, timestamp, text, group_id) 
                     VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (tg_id, chat_id) DO NOTHING
                 """, (tg_id, chat_id, timestamp, text, group_id))
                 self.connection.commit()
                 logging.info(f"Сохранён документ в БД: {text}")
@@ -41,16 +42,40 @@ class Database:
             logging.error(f"Ошибка при загрузке базы знаний для группы {group_id}: {e}")
         return documents
 
-    def add_user_to_group(self, group_id, user_id):
-        """Добавление пользователя в группу, если он не добавлен ранее."""
-        with self.connection.cursor() as cursor:
-            cursor.execute("SELECT 1 FROM group_users WHERE group_id = %s AND user_id = %s", (group_id, user_id))
-            if cursor.fetchone():
-                return False 
+    def add_user(self, group_id, tg_id):
+        """Добавление пользователя в таблицу users и связывание с группой в group_users."""
+        try:
+            with closing(self.connection.cursor()) as cursor:
+                tg_id_str = str(tg_id)
+                group_id_str = str(group_id)
 
-            cursor.execute("INSERT INTO group_users (group_id, user_id) VALUES (%s, %s)", (group_id, user_id))
-            self.connection.commit()
-            return True
+                cursor.execute("""
+                    INSERT INTO users (tg_id, role, group_id)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (tg_id) DO NOTHING
+                    RETURNING id
+                """, (tg_id_str, 'user', group_id_str))
+                    
+                user_id = cursor.fetchone()
+                if user_id is not None:
+                    user_id = user_id[0]
+                    
+                    cursor.execute("""
+                        INSERT INTO group_users (group_id, user_id)
+                        VALUES (%s, %s)
+                        ON CONFLICT (group_id, user_id) DO NOTHING
+                    """, (group_id_str, user_id))
+                    
+                    self.connection.commit() 
+                    return user_id  
+                else:
+                    logging.info("Пользователь уже существует.")
+                    return None
+
+        except Exception as e:
+            logging.error(f"Ошибка при добавлении пользователя: {e}")
+            self.connection.rollback()
+            return None
 
     def get_user_group(self, tg_id):
         """Получение группы пользователя по его tg_id."""
@@ -70,6 +95,7 @@ class Database:
                     group = cursor.fetchone()
                     return group 
                 else:
+                    logging.info("Пользователь не найден.")
                     return None
         except Exception as e:
             logging.error(f"Ошибка при получении группы пользователя: {e}")
@@ -87,24 +113,22 @@ class Database:
             logging.error(f"Ошибка при загрузке групп: {e}")
         return groups
 
-    def is_user_in_group(self, group_id, user_id): #TODO use?
-        """Проверка, находится ли пользователь в группе."""
-        with self.connection.cursor() as cursor:
-            cursor.execute("SELECT 1 FROM group_users WHERE group_id = %s AND user_id = %s", (group_id, user_id))
-            return cursor.fetchone() is not None
-
-    def get_allowed_chat_ids(self): # TODO 
-        """Получение разрешенных chat_id из базы данных."""
-        chat_ids = set()
+    def get_group_by_chat_id(self, chat_id):
+        """Получение группы по chat_id."""
         try:
             with closing(self.connection.cursor()) as cursor:
-                cursor.execute("SELECT chat_id FROM allowed_chats")  
-                rows = cursor.fetchall()
-                chat_ids.update(row[0] for row in rows) 
+                cursor.execute("""
+                    SELECT g.id, gc.chat_type 
+                    FROM groups g
+                    JOIN group_chats gc ON g.id = gc.group_id 
+                    WHERE gc.chat_id = %s
+                """, (str(chat_id),)) 
+                result = cursor.fetchone()  
+                return result if result else (None, None) 
         except Exception as e:
-            logging.error(f"Ошибка при получении разрешенных chat_id: {e}")
-        return chat_ids
-
+            logging.error(f"Ошибка при получении группы по chat_id: {e}")
+            return None, None
+        
     def close(self):
         """Закрытие подключения к базе данных."""
         if self.connection:
